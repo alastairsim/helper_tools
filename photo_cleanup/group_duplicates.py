@@ -45,6 +45,33 @@ import imagehash
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff", ".gif"}
 
+# Marker dropped in our output folder so re-runs can safely wipe it. We refuse
+# to delete a non-empty folder that lacks this file (i.e. one we didn't create).
+OUTPUT_MARKER = ".photo_cleanup_output"
+
+
+def prepare_output(out):
+    """Create a fresh, empty output folder without risking arbitrary deletion.
+
+    Only removes `out` if it's empty or carries our OUTPUT_MARKER (proof a prior
+    run created it). Anything else exits rather than recursively deleting a
+    folder the user didn't intend us to own.
+    """
+    if os.path.exists(out):
+        if not os.path.isdir(out):
+            sys.exit(f"Output path exists and is not a folder: {out}")
+        ours = os.path.exists(os.path.join(out, OUTPUT_MARKER))
+        empty = not os.listdir(out)
+        if not (ours or empty):
+            sys.exit(
+                f"Refusing to delete '{out}': it isn't empty and wasn't created "
+                f"by this tool. Choose a new --out folder, or delete it yourself "
+                f"first."
+            )
+        shutil.rmtree(out)
+    os.makedirs(out)
+    open(os.path.join(out, OUTPUT_MARKER), "w").close()
+
 
 def collect_images(src, out):
     files = []
@@ -71,9 +98,7 @@ def main():
     out = os.path.abspath(args.out) if args.out else os.path.join(src, "_grouped")
 
     # Fresh output each run so groups don't get stale.
-    if os.path.exists(out):
-        shutil.rmtree(out)
-    os.makedirs(out)
+    prepare_output(out)
 
     files = collect_images(src, out)
     if not files:
